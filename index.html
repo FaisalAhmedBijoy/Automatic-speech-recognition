@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech Recognition</title>
+</head>
+<body>
+  <h1>Speech Recognition</h1>
+  <button id="startBtn">Start Recording</button>
+  <button id="stopBtn" disabled>Stop Recording</button>
+  <button id="transcribeBtn" disabled>Transcribe</button>
+  <audio id="audioPlayer" controls></audio>
+  <p id="transcription"></p>
+
+  <script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let audioBlob;
+
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const transcribeBtn = document.getElementById('transcribeBtn');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const transcriptionDisplay = document.getElementById('transcription');
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = event => {
+        audioChunks.push(event.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        audioPlayer.src = URL.createObjectURL(audioBlob);
+        audioChunks = [];
+        transcribeBtn.disabled = false;
+      };
+    });
+
+    startBtn.onclick = () => {
+      mediaRecorder.start();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+    };
+
+    stopBtn.onclick = () => {
+      mediaRecorder.stop();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    };
+
+    transcribeBtn.onclick = () => {
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+      console.log(audioBlob)
+
+      fetch('http://127.0.0.1:5000/transcribe', {
+        method: 'POST',
+        body: formData
+      })
+        .then(response => response.json())
+        .then(data => {
+          transcriptionDisplay.textContent = `Transcription: ${data.transcription}`;
+        })
+        .catch(error => console.error('Error:', error));
+    };
+  </script>
+</body>
+</html>
