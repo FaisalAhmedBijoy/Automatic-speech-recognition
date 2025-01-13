@@ -4,6 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Speech Recognition</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      text-align: center;
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #transcription {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
   <h1>Speech Recognition</h1>
@@ -24,47 +43,72 @@
     const audioPlayer = document.getElementById('audioPlayer');
     const transcriptionDisplay = document.getElementById('transcription');
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      mediaRecorder = new MediaRecorder(stream);
+    // Request microphone access and initialize MediaRecorder
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        mediaRecorder = new MediaRecorder(stream);
 
-      mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data);
-      };
+        mediaRecorder.ondataavailable = event => {
+          audioChunks.push(event.data);
+        };
 
-      mediaRecorder.onstop = () => {
-        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        audioPlayer.src = URL.createObjectURL(audioBlob);
-        audioChunks = [];
-        transcribeBtn.disabled = false;
-      };
-    });
+        mediaRecorder.onstop = () => {
+          audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+          audioPlayer.src = URL.createObjectURL(audioBlob);
+          audioChunks = [];
+          transcribeBtn.disabled = false; // Enable Transcribe button after recording
+        };
+      })
+      .catch(error => {
+        alert("Error accessing microphone: " + error.message);
+        console.error("Microphone access error:", error);
+      });
 
+    // Start recording
     startBtn.onclick = () => {
-      mediaRecorder.start();
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
+      if (mediaRecorder) {
+        mediaRecorder.start();
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        transcribeBtn.disabled = true; // Disable transcribe until new recording is finished
+        transcriptionDisplay.textContent = ""; // Clear previous transcription
+      }
     };
 
+    // Stop recording
     stopBtn.onclick = () => {
-      mediaRecorder.stop();
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
+      if (mediaRecorder) {
+        mediaRecorder.stop();
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
     };
 
+    // Send audio to the API for transcription
     transcribeBtn.onclick = () => {
       const formData = new FormData();
       formData.append('audio', audioBlob);
-      console.log(audioBlob)
+
+      // Display a loading message while waiting for transcription
+      transcriptionDisplay.textContent = "Transcribing...";
 
       fetch('http://127.0.0.1:5000/transcribe', {
         method: 'POST',
         body: formData
       })
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+          return response.json();
+        })
         .then(data => {
           transcriptionDisplay.textContent = `Transcription: ${data.transcription}`;
         })
-        .catch(error => console.error('Error:', error));
+        .catch(error => {
+          transcriptionDisplay.textContent = "Failed to transcribe the audio.";
+          console.error("Error:", error);
+        });
     };
   </script>
 </body>

@@ -1,13 +1,13 @@
+import os
+from flask_cors import CORS
 from flask import Flask, request, jsonify
 from transformers import pipeline
-from flask_cors import CORS
-import tempfile
-import os
-import wave
-import numpy as np
+from pydub import AudioSegment
 
 app = Flask(__name__)
 CORS(app)
+
+# Load the transcriber model
 transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-base.en")
 
 @app.route('/transcribe', methods=['POST'])
@@ -16,23 +16,29 @@ def transcribe():
         return jsonify({"error": "No audio file provided"}), 400
 
     audio_file = request.files['audio']
+
+    # Create a temporary directory if it doesn't exist
     temp_dir = 'uploads_audio'
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+
     file_path = os.path.join(temp_dir, 'temp_audio.wav')
-    audio_file.save(file_path)
 
-    print('audio file: ',audio_file)
-    print('file_path: ',file_path)
+    try:
+        # Convert the audio file to WAV format if necessary
+        audio = AudioSegment.from_file(audio_file)
+        audio = audio.set_channels(1)  # Ensure mono audio
+        audio.export(file_path, format="wav")
+    except Exception as e:
+        return jsonify({"error": f"Failed to process audio file: {str(e)}"}), 500
 
-    with wave.open(file_path, 'rb') as wav_file:
-        sr = wav_file.getframerate()
-        frames = wav_file.readframes(wav_file.getnframes())
-        audio_data = np.frombuffer(frames, dtype=np.int16)
-
-    # Normalize and convert to float32
-    audio_data = audio_data.astype(np.float32) / np.iinfo(np.int16).max
-    transcription = transcriber({"sampling_rate": sr, "raw": audio_data})["text"]
+    try:
+        # Use the transcriber pipeline
+        transcription = transcriber(file_path)["text"]
+    except Exception as e:
+        return jsonify({"error": f"Failed to transcribe audio: {str(e)}"}), 500
 
     return jsonify({"transcription": transcription})
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
