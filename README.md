@@ -13,6 +13,6 @@ Automatic Speech Recognition
 
 
 3. ASR with Flask
- ```bash
+    ```bash
     python app.py
     ``` 
