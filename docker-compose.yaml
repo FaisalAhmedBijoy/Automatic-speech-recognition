@@ -1,0 +1,18 @@
+services:
+  speech-recognition:
+    image: speech-recognition:v1
+    container_name: speech-recognition
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "6037:6037"
+    environment:
+      - CORS_ORIGINS=['*']
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]

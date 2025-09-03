@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-Time Speech Recognition</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/jsrsasign"></script>
+    <script>
+      const CLIENTS = {
+        A: { ID: "A112233", SECRET: "A445566" },
+        B: { ID: "B112233", SECRET: "B445566" },
+        C: { ID: "C112233", SECRET: "C445566" },
+      };
+
+      const socket = new WebSocket("ws://127.0.0.1:6037/speech/en/en_audio");
+   
+      let isRecording = false,
+        mediaRecorder,
+        uniqueKey;
+
+      function generateUniqueKey() {
+        return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      }
+
+      function encodeKeyHS256(uniqueKey, secret) {
+        return KJUR.jws.JWS.sign(
+          "HS256",
+          JSON.stringify({ alg: "HS256", typ: "JWT" }),
+          JSON.stringify({ key: uniqueKey, timestamp: Date.now() }),
+          { utf8: secret }
+        );
+      }
+
+      async function toggleRecording() {
+        if (!isRecording) {
+          isRecording = true;
+          document.getElementById("recordButton").textContent =
+            "Stop Recording";
+
+          uniqueKey = generateUniqueKey();
+          const encodedKey = encodeKeyHS256(uniqueKey, CLIENTS.BIDA.SECRET);
+
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0 && isRecording) {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                message = JSON.stringify({
+                  client_id: CLIENTS.BIDA.ID,
+                  key: encodedKey,
+                  audio: reader.result.split(",")[1],
+                });
+                socket.send(message);
+                console.log("Sent audio data");
+                console.log("Unique Key: ", encodedKey);
+                console.log("Client ID: ", CLIENTS.BIDA.ID);
+              };
+              reader.readAsDataURL(event.data);
+            }
+          };
+          mediaRecorder.start(500);
+        } else {
+          isRecording = false;
+          document.getElementById("recordButton").textContent =
+            "Start Recording";
+          mediaRecorder.stop();
+          socket.send(
+            JSON.stringify({
+              key: encodeKeyHS256(uniqueKey, CLIENTS.SDG.SECRET),
+              stop: true,
+            })
+          );
+        }
+      }
+
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log("Response: ", data);
+        if (data.status === "success" && data.transcription) {
+          document.getElementById("transcription").textContent =
+            data.transcription;
+        }
+      };
+    </script>
+  </head>
+  <body>
+    <div class="container text-center mt-5">
+      <h1>Real-Time Speech Recognition</h1>
+      <button
+        id="recordButton"
+        class="btn btn-primary mt-3"
+        onclick="toggleRecording()"
+      >
+        Start Recording
+      </button>
+      <div class="mt-4 border p-3" id="transcription"></div>
+    </div>
+  </body>
+</html>

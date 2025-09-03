@@ -1,0 +1,10 @@
+.env
+requirements.txt
+Dockerfile
+docker-compose.yml
+app/models
+__pycache__
+*__pycache__
+*.log
+*.pyc
+*.env
